@@ -1,0 +1,65 @@
+_format_version: "3.0"
+services:
+  - name: google-books
+    url: http://google-books-service.google-books-prod.svc:9000
+    # 'preserve_host' has been REMOVED from here
+    routes:
+      # This route handles the home page: GET /
+      - name: google-books-index
+        paths:
+          - /
+        protocols:
+          - http
+          - https
+        strip_path: false
+        preserve_host: true  # <--- IT MOVED HERE
+
+      # This route handles the health check: GET /health
+      - name: google-books-health
+        paths:
+          - /health
+        protocols:
+          - http
+          - https
+        strip_path: false
+        preserve_host: true  # <--- AND HERE
+
+      # This route handles the API: GET /api/auth/google/exchange
+      - name: google-books-auth
+        paths:
+          - /api/auth/google/exchange
+        protocols:
+          - http
+          - https
+        strip_path: false
+        preserve_host: true  # <--- AND HERE
+
+      # This route handles the API: GET /api/books/search
+      - name: google-books-search
+        paths:
+          - /api/books/search
+        protocols:
+          - http
+          - https
+        strip_path: false
+        preserve_host: true  # <--- AND HERE
+
+      # This route handles the API: GET /api/my-library/bookshelves
+      - name: google-books-library
+        paths:
+          - /api/my-library/bookshelves
+        protocols:
+          - http
+          - https
+        strip_path: false
+        preserve_host: true  # <--- AND HERE
+
+      # This route handles the static assets: GET /assets/*
+      - name: google-books-assets
+        paths:
+          - /assets
+        protocols:
+          - http
+          - https
+        strip_path: false
+        preserve_host: true  # <--- AND HERE
