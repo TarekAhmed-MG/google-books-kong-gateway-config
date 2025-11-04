@@ -3,3 +3,4 @@ tls.key
 kong-key.rtf
 konnect-export.yaml
 values.yaml
+.env

@@ -1,65 +1,141 @@
 _format_version: "3.0"
+
+########################################
+# 1) TLS certificate for api.definityai.org
+########################################
+certificates:
+  - id: 7e6afac4-2f8f-49f3-8763-f7988297cfb0
+    cert: |
+      -----BEGIN CERTIFICATE-----
+
+      -----END CERTIFICATE-----
+      -----BEGIN CERTIFICATE-----
+
+      -----END CERTIFICATE-----
+    key: |
+      -----BEGIN RSA PRIVATE KEY-----
+
+      -----END RSA PRIVATE KEY-----
+    snis:
+      - name: api.definityai.org
+
+########################################
+# 2) Services + Routes
+########################################
 services:
+  - name: acme-solver
+    url: http://cm-acme-http-solver-998w6.google-books-prod.svc:8089
+    routes:
+      - name: acme-solver-route
+        paths: [ /.well-known/acme-challenge/ ]
+        strip_path: false
+        preserve_host: true
+        protocols: [ http, https ]
+
   - name: google-books
     url: http://google-books-service.google-books-prod.svc:9000
-    # 'preserve_host' has been REMOVED from here
     routes:
-      # This route handles the home page: GET /
-      - name: google-books-index
-        paths:
-          - /
-        protocols:
-          - http
-          - https
-        strip_path: false
-        preserve_host: true  # <--- IT MOVED HERE
-
-      # This route handles the health check: GET /health
       - name: google-books-health
-        paths:
-          - /health
-        protocols:
-          - http
-          - https
+        paths: [ /health ]
+        protocols: [ http, https ]
         strip_path: false
-        preserve_host: true  # <--- AND HERE
+        preserve_host: true
 
-      # This route handles the API: GET /api/auth/google/exchange
       - name: google-books-auth
-        paths:
-          - /api/auth/google/exchange
-        protocols:
-          - http
-          - https
+        paths: [ /api/auth/google/exchange ]
+        methods: [ POST, OPTIONS ]
+        protocols: [ http, https ]
         strip_path: false
-        preserve_host: true  # <--- AND HERE
+        preserve_host: true
 
-      # This route handles the API: GET /api/books/search
       - name: google-books-search
-        paths:
-          - /api/books/search
-        protocols:
-          - http
-          - https
+        paths: [ /api/books/search ]
+        methods: [ GET, OPTIONS ]
+        protocols: [ http, https ]
         strip_path: false
-        preserve_host: true  # <--- AND HERE
+        preserve_host: true
 
-      # This route handles the API: GET /api/my-library/bookshelves
+      # Protected API: split GET/POST vs. OPTIONS so preflight isn't rate-limited
       - name: google-books-library
-        paths:
-          - /api/my-library/bookshelves
-        protocols:
-          - http
-          - https
+        paths: [ /api/my-library ]
+        methods: [ GET, POST ]
+        protocols: [ http, https ]
         strip_path: false
-        preserve_host: true  # <--- AND HERE
+        preserve_host: true
 
-      # This route handles the static assets: GET /assets/*
-      - name: google-books-assets
-        paths:
-          - /assets
-        protocols:
-          - http
-          - https
+      - name: google-books-library-preflight
+        paths: [ /api/my-library ]
+        methods: [ OPTIONS ]
+        protocols: [ http, https ]
         strip_path: false
-        preserve_host: true  # <--- AND HERE
+        preserve_host: true
+
+      - name: google-books-assets
+        paths: [ /assets ]
+        protocols: [ http, https ]
+        strip_path: false
+        preserve_host: true
+
+########################################
+# 3) Plugins (CORS + OIDC + Rate Limiting)
+########################################
+plugins:
+  - name: cors
+    enabled: true
+    service: google-books
+    config:
+      origins:
+        - "http://localhost:3000"
+        - "https://mercator-library.web.app"
+        - "https://definityai.org"
+        - "https://www.definityai.org"
+      methods: [ GET, POST, OPTIONS, PUT, DELETE ]
+      headers:
+        - Authorization
+        - X-Google-Access-Token
+        - Content-Type
+      exposed_headers: [ Content-Type ]
+      credentials: false
+      max_age: 3600
+      preflight_continue: false
+
+  - name: openid-connect
+    enabled: true
+    route: google-books-library
+    config:
+      auth_methods: [ bearer ]
+      bearer_token_param_type: [ header ]
+      issuer: https://accounts.google.com
+      client_id:
+        - "1033367449745-tgkqjo35chh3mqiprqqo8lfup01am8p6.apps.googleusercontent.com"
+      verify_signature: true
+      verify_claims: true
+      audience_claim: [ aud ]
+      verify_nonce: false
+      leeway: 0
+      login_action: upstream
+      session_strategy: default
+      cache_tokens: true
+      cache_user_info: true
+      cache_ttl: 3600
+      ssl_verify: true
+      hide_credentials: false
+      run_on_preflight: false
+      timeout: 10000
+      http_version: 1.1
+
+  # --- Daily quota: 100 requests/day on protected endpoints ---
+  # Defaulting to identifier "ip" so it works without Consumers.
+  # (See notes below to switch to per-user with Consumers.)
+  - name: rate-limiting-advanced
+    enabled: true
+    route: google-books-library
+    config:
+      limit: [ 100 ]          # 100 requests...
+      window_size: [ 86400 ]  # ...per 86400s (1 day)
+      window_type: fixed
+      identifier: ip          # quick-win: per client IP
+      strategy: local         # single-gateway-instance; use Redis for cluster-wide
+      sync_rate: -1           # disable background sync
+      error_code: 429
+      error_message: "Daily quota exceeded (100/day). Try again tomorrow."

@@ -1,0 +1,16 @@
+_format_version: "3.0"
+plugins:
+  - name: cors
+    # This attaches the plugin to the 'google-books' service
+    service: google-books
+    config:
+      origins:
+        - http://localhost:3000
+      methods:
+        - GET
+        - POST
+        - OPTIONS
+      headers:
+        - Authorization
+        - Content-Type
+      credentials: true
